@@ -1,0 +1,60 @@
+Permasalahan yang mungkin terjadi:
+
+1. Logika bisnis tersebar: Logika untuk menentukan publish_date dan status berdasarkan genre serta logika untuk upgrade penulis berada langsung di controller. Ini membuat kode controller menjadi gemuk dan sulit dipelihara.
+2. Potensi duplikasi kode: Jika logika yang sama (misalnya, penentuan publish_date dan status) dibutuhkan di tempat lain, kamu harus mengulang kode tersebut.
+3. Sulit diuji: Menguji logika bisnis di dalam controller bisa jadi rumit.
+
+Perubahan yang disarankan:
+
+- Pindahkan logika bisnis ke model:
+
+- Buat method di model Article untuk menangani penentuan publish_date dan status:
+
+ class Article < ApplicationRecord
+   def update_status_and_publish_date
+     if genre == 'Pop'
+       self.publish_date = Date.today + 1.month
+       self.status = 'pending_review'
+     elsif genre == 'Animals'
+       self.publish_date = Date.today + 2.weeks
+       self.status = 'pending_approval'
+      end
+    save!
+  end
+end
+
+
+- Buat method di model Writer untuk menangani upgrade penulis:
+
+class Writer < ApplicationRecord
+  def check_for_upgrade
+    if articles.count > 10
+      self.status = 'pending_upgrade_review'
+      save!
+      SendWriterUpgradeMail.perform_now(self)
+    end
+  end
+end
+
+
+- Sederhanakan controller:
+
+class ArticlesController < ApplicationController
+  def update
+    article = Article.find(params[:id])
+    article.update(form_params)
+    article.update_status_and_publish_date
+
+    if article.status == 'pending_review'
+      article.writer.check_for_upgrade 
+    end
+  end
+end
+
+
+Keuntungan dari perubahan ini:
+
+1. Kode lebih bersih dan mudah dibaca: Logika bisnis terpisah dari controller, sehingga controller lebih fokus pada tugasnya yaitu menangani request dan response.
+2. Kode lebih mudah diuji: Kamu bisa menguji method di model secara terpisah.
+3. Kode lebih mudah dipelihara: Jika ada perubahan logika, kamu hanya perlu mengubahnya di satu tempat (di model).
+4. Mengurangi duplikasi kode: Logika bisnis dapat digunakan kembali di tempat lain jika dibutuhkan.
